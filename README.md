@@ -86,8 +86,17 @@ Vercel reads [vercel.json](vercel.json): build with `npm run build`, serve
 
 `prototype/assets/` is **git-ignored on purpose**. The local prototype plays a
 copyrighted track under HYPER mode for feel; it is never committed or
-deployed, and the code degrades silently when the file is absent. Ship an
-original or properly licensed cue before using music publicly.
+deployed. Where the file is absent (every public deploy), an **original
+synthesized cue** plays instead — a soft clock tick each second under a
+slow-breathing minor drone, generated live in Web Audio. Nothing to license,
+nothing to download.
+
+## Mobile
+
+Portrait phones get a dismissible "rotate your phone" prompt (the clock is a
+wide desk display; dismissal is remembered per session). Chrome compacts below
+700 px wide / 450 px tall, and the fog wall tracks the camera so portrait
+framing no longer swallows the digits.
 
 ## Status
 

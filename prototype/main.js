@@ -584,22 +584,107 @@ function fpsSample() {
 }
 
 // ---------------------------------------------------------------- hyper music
-// plays only while HYPER is on in JUST DO IT mode, with a soft fade in/out.
-// NOTE: licensed track — fine for this local prototype, must be replaced or
-// licensed before the site ships publicly.
+// Where the licensed local mp3 exists (dev only — it is gitignored and never
+// deployed), it plays while HYPER is on in JUST DO IT mode. Everywhere else an
+// ORIGINAL synthesized cue plays instead: a soft clock tick each second under
+// a slow-breathing minor drone. No files, nothing to license.
 
 const hyperMusic = new Audio('./assets/mountains.mp3');
 hyperMusic.loop = true;
 hyperMusic.preload = 'none';     // only fetched once HYPER is actually used
 hyperMusic.volume = 0;
 let musicTarget = 0;
-let musicAvailable = true;       // false where the track is not deployed
-hyperMusic.addEventListener('error', () => { musicAvailable = false; });
+let musicAvailable = true;       // flips false where the track is not deployed
+
+let synth = null;
+let synthTarget = 0;
+
+function buildSynth() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ctx = new AC();
+  const master = ctx.createGain();
+  master.gain.value = 0;
+  master.connect(ctx.destination);
+
+  // drone: detuned triangle pairs on a D minor stack through a breathing lowpass
+  const padLp = ctx.createBiquadFilter();
+  padLp.type = 'lowpass';
+  padLp.frequency.value = 520;
+  padLp.Q.value = 0.4;
+  const padGain = ctx.createGain();
+  padGain.gain.value = 0.22;
+  padLp.connect(padGain).connect(master);
+  for (const [freq, level] of [[73.42, 0.5], [110, 0.34], [146.83, 0.26], [220, 0.13]]) {
+    for (const det of [-4, 4]) {
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = freq;
+      o.detune.value = det;
+      const g = ctx.createGain();
+      g.gain.value = level / 2;
+      o.connect(g).connect(padLp);
+      o.start();
+    }
+  }
+  const lfo = ctx.createOscillator();          // one slow breath every ~26 s
+  lfo.frequency.value = 1 / 26;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 420;
+  lfo.connect(lfoGain).connect(padLp.frequency);
+  lfo.start();
+
+  const noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.06), ctx.sampleRate);
+  const nd = noise.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+  return { ctx, master, noise, nextTick: 0 };
+}
+
+function synthTick(at) {
+  const { ctx, master, noise } = synth;
+  // felt-hammer thump
+  const o = ctx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(180, at);
+  o.frequency.exponentialRampToValueAtTime(70, at + 0.09);
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.0001, at);
+  og.gain.exponentialRampToValueAtTime(0.5, at + 0.006);
+  og.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+  o.connect(og).connect(master);
+  o.start(at); o.stop(at + 0.2);
+  // quiet mechanism click
+  const s = ctx.createBufferSource();
+  s.buffer = noise;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 2;
+  const sg = ctx.createGain();
+  sg.gain.setValueAtTime(0.12, at);
+  sg.gain.exponentialRampToValueAtTime(0.0001, at + 0.05);
+  s.connect(bp).connect(sg).connect(master);
+  s.start(at);
+}
+
+function startSynth() {
+  if (!synth) synth = buildSynth();
+  if (!synth) return;
+  if (synth.ctx.state === 'suspended') synth.ctx.resume();
+  synth.nextTick = Math.ceil(synth.ctx.currentTime + 0.05);
+}
+
+// the mp3 is absent on public deploys: fall through to the synthesized cue
+hyperMusic.addEventListener('error', () => {
+  musicAvailable = false;
+  syncHyperMusic();
+});
 
 function syncHyperMusic() {
   const want = settings.hyper && MODES[modeIndex].id === 'justdoit';
-  musicTarget = want ? 0.65 : 0;
+  musicTarget = want && musicAvailable ? 0.65 : 0;
+  synthTarget = want && !musicAvailable ? 0.55 : 0;
   if (want && musicAvailable && hyperMusic.paused) hyperMusic.play().catch(() => {});
+  if (synthTarget > 0) startSynth();
 }
 
 // if hyper was persisted ON, autoplay is blocked until a real user gesture
@@ -608,6 +693,7 @@ function syncHyperMusic() {
     if (musicTarget > 0 && musicAvailable && hyperMusic.paused) {
       hyperMusic.play().catch(() => {});
     }
+    if (synthTarget > 0) startSynth();
   }, { passive: true }));
 
 // ---------------------------------------------------------------- HTML wiring
@@ -722,6 +808,9 @@ el.hyper.addEventListener('click', () => {
   settings.hyper = !settings.hyper;
   saveSettings(settings);
   applyModeChrome();
+  // build the fallback AudioContext inside this gesture so it is allowed to
+  // run even if the mp3 404s a moment later
+  if (settings.hyper && !musicAvailable) startSynth();
   syncHyperMusic();                // music in, music out — with the fade
   beginTransition(modeIndex);      // re-decode in place
 });
@@ -739,6 +828,20 @@ window.addEventListener('keydown', e => {
   if (e.key === 'h' || e.key === 'H') { if (modeIndex === 0) el.hyper.click(); }
   if (e.key === 'f' || e.key === 'F') el.fx.click();
 });
+
+// portrait prompt on phones: dismissal remembered for the session
+const rotateDismiss = document.getElementById('rotateDismiss');
+if (rotateDismiss) {
+  try {
+    if (sessionStorage.getItem('cc-rotate-dismissed')) {
+      document.body.classList.add('rotate-dismissed');
+    }
+  } catch (_) {}
+  rotateDismiss.addEventListener('click', () => {
+    document.body.classList.add('rotate-dismissed');
+    try { sessionStorage.setItem('cc-rotate-dismissed', '1'); } catch (_) {}
+  });
+}
 
 el.settingsBtn.addEventListener('click', () =>
   el.settingsPanel.classList.toggle('open'));
@@ -793,8 +896,13 @@ window.addEventListener('resize', () => {
 
 function fitCamera() {
   const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
-  const needed = 15 / (Math.tan(halfFov) * Math.min(camera.aspect, 2.4));
+  const aspect = Math.min(Math.max(camera.aspect, 0.44), 2.4);
+  const needed = 15 / (Math.tan(halfFov) * aspect);
   CAM_BASE.z = Math.max(19, needed);
+  // portrait phones push the camera far back — keep the fog wall behind the
+  // clock at any distance (fixed fog used to swallow the digits on mobile)
+  scene.fog.near = CAM_BASE.z + 5;
+  scene.fog.far = CAM_BASE.z + 49;
 }
 fitCamera();
 
@@ -872,12 +980,28 @@ function stepFrame(dt) {
   const mode = MODES[modeIndex];
   setDisplayString(mode.text(now), scramble);
 
-  // -------- hyper music fade
+  // -------- hyper music fade (mp3 where present, synth cue elsewhere)
   const dv = musicAvailable ? musicTarget - hyperMusic.volume : 0;
   if (Math.abs(dv) > 0.005) {
     hyperMusic.volume = Math.max(0, Math.min(1, hyperMusic.volume + dv * Math.min(1, dt * 2)));
   } else if (musicTarget === 0 && !hyperMusic.paused) {
     hyperMusic.pause();
+  }
+  if (synth) {
+    if (synthTarget > 0 && synth.ctx.state === 'running') {
+      const ct = synth.ctx.currentTime;
+      while (synth.nextTick < ct + 0.12) {
+        if (synth.nextTick > ct - 0.05) synthTick(Math.max(synth.nextTick, ct + 0.001));
+        synth.nextTick += 1;
+      }
+    }
+    const g = synth.master.gain;
+    const ds = synthTarget - g.value;
+    if (Math.abs(ds) > 0.004) {
+      g.value = Math.max(0, Math.min(1, g.value + ds * Math.min(1, dt * 2)));
+    } else if (synthTarget === 0 && g.value < 0.01 && synth.ctx.state === 'running') {
+      synth.ctx.suspend();
+    }
   }
 
   // -------- pulses on changed digits
@@ -962,6 +1086,10 @@ window.__cd = {
   attract,
   applyTier,
   get tier() { return tier; },
+  get music() {
+    return { musicTarget, synthTarget, musicAvailable,
+      mp3paused: hyperMusic.paused, synthState: synth ? synth.ctx.state : 'none' };
+  },
   forceSize(w, h) {
     renderer.setSize(w, h, false);
     if (usesComposer) sizeComposer(w, h);
