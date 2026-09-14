@@ -533,6 +533,9 @@ composer.addPass(new OutputPass());
 
 // composer.setSize would push bloom back to full resolution — keep it at half
 function sizeComposer(w, h) {
+  // EffectComposer captures the pixel ratio at construction time — sync it or
+  // every post-processing target renders at 1x and the digits blur on hidpi
+  composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(w, h);
   bloom.setSize(w / 2, h / 2);
 }
@@ -605,6 +608,12 @@ const hyperMusic = new Audio(MUSIC_SOURCES[0]);
 hyperMusic.loop = true;
 hyperMusic.preload = 'none';     // only fetched once HYPER is actually used
 hyperMusic.volume = 0;
+// iOS ignores the volume property (hardware volume only): no fades there,
+// and pause must not wait for a fade that will never happen
+const volumeControllable = (() => {
+  try { hyperMusic.volume = 0.5; const ok = hyperMusic.volume === 0.5; hyperMusic.volume = 0; return ok; }
+  catch (_) { return false; }
+})();
 let musicTarget = 0;
 let musicAvailable = true;       // flips false when every source is absent
 
@@ -706,7 +715,7 @@ function syncHyperMusic() {
 }
 
 // if hyper was persisted ON, autoplay is blocked until a real user gesture
-['pointerdown', 'keydown'].forEach(ev =>
+['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev =>
   window.addEventListener(ev, () => {
     if (musicTarget > 0 && musicAvailable && hyperMusic.paused) {
       hyperMusic.play().catch(() => {});
@@ -1000,11 +1009,16 @@ function stepFrame(dt) {
   setDisplayString(mode.text(now), scramble);
 
   // -------- hyper music fade (mp3 where present, synth cue elsewhere)
-  const dv = musicAvailable ? musicTarget - hyperMusic.volume : 0;
-  if (Math.abs(dv) > 0.005) {
-    hyperMusic.volume = Math.max(0, Math.min(1, hyperMusic.volume + dv * Math.min(1, dt * 2)));
-  } else if (musicTarget === 0 && !hyperMusic.paused) {
-    hyperMusic.pause();
+  if (!volumeControllable) {
+    // no software volume on this platform: plain play/pause
+    if (musicAvailable && musicTarget === 0 && !hyperMusic.paused) hyperMusic.pause();
+  } else {
+    const dv = musicAvailable ? musicTarget - hyperMusic.volume : 0;
+    if (Math.abs(dv) > 0.005) {
+      hyperMusic.volume = Math.max(0, Math.min(1, hyperMusic.volume + dv * Math.min(1, dt * 2)));
+    } else if (musicTarget === 0 && !hyperMusic.paused) {
+      hyperMusic.pause();
+    }
   }
   if (synth) {
     if (synthTarget > 0 && synth.ctx.state === 'running') {
@@ -1105,6 +1119,11 @@ window.__cd = {
   attract,
   applyTier,
   get tier() { return tier; },
+  get res() {
+    const rt = composer.renderTarget1;
+    return { canvas: renderer.domElement.width + 'x' + renderer.domElement.height,
+      composer: rt.width + 'x' + rt.height, dpr: renderer.getPixelRatio() };
+  },
   get music() {
     return { musicTarget, synthTarget, musicAvailable,
       mp3paused: hyperMusic.paused, synthState: synth ? synth.ctx.state : 'none' };
