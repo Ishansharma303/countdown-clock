@@ -601,13 +601,12 @@ function fpsSample() {
 // ORIGINAL synthesized cue plays instead: a soft clock tick each second under
 // a slow-breathing minor drone. No files, nothing to license.
 
-// source chain: the deployable licensed track first, the local dev track
-// second, the synthesized cue as the final fallback
-const MUSIC_SOURCES = ['./assets/hyper.mp3', './assets/mountains.mp3'];
-let musicSrcIdx = 0;
-const hyperMusic = new Audio(MUSIC_SOURCES[0]);
+// single source: assets/hyper.mp3. If it is absent the synthesized cue below
+// takes over, so a deploy without a track still has audio.
+const MUSIC_SRC = './assets/hyper.mp3';
+const hyperMusic = new Audio(MUSIC_SRC);
 hyperMusic.loop = true;
-hyperMusic.preload = 'none';     // only fetched once HYPER is actually used
+hyperMusic.preload = 'none';     // upgraded to a real fetch on first gesture
 hyperMusic.volume = 0;
 // iOS ignores the volume property (hardware volume only): no fades there,
 // and pause must not wait for a fade that will never happen
@@ -695,16 +694,10 @@ function startSynth() {
   synth.nextTick = Math.ceil(synth.ctx.currentTime + 0.05);
 }
 
-// walk the source chain; when every source 404s, hand over to the synth cue
+// no track deployed (or it failed to load) -> hand over to the synth cue
 hyperMusic.addEventListener('error', () => {
-  musicSrcIdx++;
-  if (musicSrcIdx < MUSIC_SOURCES.length) {
-    hyperMusic.src = MUSIC_SOURCES[musicSrcIdx];
-    if (musicTarget > 0) hyperMusic.play().catch(() => {});
-  } else {
-    musicAvailable = false;
-    syncHyperMusic();
-  }
+  musicAvailable = false;
+  syncHyperMusic();
 });
 
 function syncHyperMusic() {
@@ -715,9 +708,17 @@ function syncHyperMusic() {
   if (synthTarget > 0) startSynth();
 }
 
-// retry after autoplay rejection: any real user gesture unlocks playback
+// The first real gesture is the only moment mobile browsers allow audio to
+// start, so use it to both begin buffering the track and retry any playback
+// an autoplay policy rejected earlier.
+let musicWarmed = false;
 ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev =>
   window.addEventListener(ev, () => {
+    if (!musicWarmed && musicAvailable) {
+      musicWarmed = true;
+      hyperMusic.preload = 'auto';
+      hyperMusic.load();
+    }
     if (musicTarget > 0 && musicAvailable && hyperMusic.paused) {
       hyperMusic.play().catch(() => {});
     }
@@ -851,6 +852,7 @@ el.fx.addEventListener('click', () => {
 
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Escape') { el.settingsPanel.classList.remove('open'); return; }
   if (e.key === 'ArrowRight' || e.key === ' ') switchMode(1);
   if (e.key === 'ArrowLeft') switchMode(-1);
   if (e.key === 'h' || e.key === 'H') { if (modeIndex === 0) el.hyper.click(); }
@@ -873,6 +875,13 @@ if (rotateDismiss) {
 
 el.settingsBtn.addEventListener('click', () =>
   el.settingsPanel.classList.toggle('open'));
+// tapping anywhere outside the panel closes it (phones have no stray cursor
+// to move away, so a sticky panel hides the whole display)
+window.addEventListener('pointerdown', e => {
+  if (!el.settingsPanel.classList.contains('open')) return;
+  if (el.settingsPanel.contains(e.target) || el.settingsBtn.contains(e.target)) return;
+  el.settingsPanel.classList.remove('open');
+}, { capture: true });
 el.applyBtn.addEventListener('click', () => {
   const newQuality = ['auto', 'high', 'lite'].includes(el.qualityInput.value)
     ? el.qualityInput.value : 'auto';
@@ -1127,7 +1136,8 @@ window.__cd = {
   },
   get music() {
     return { musicTarget, synthTarget, musicAvailable,
-      mp3paused: hyperMusic.paused, synthState: synth ? synth.ctx.state : 'none' };
+      mp3paused: hyperMusic.paused, mp3time: hyperMusic.currentTime,
+      mp3src: hyperMusic.currentSrc, synthState: synth ? synth.ctx.state : 'none' };
   },
   forceSize(w, h) {
     renderer.setSize(w, h, false);
