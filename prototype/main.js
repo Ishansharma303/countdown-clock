@@ -545,10 +545,18 @@ function sizeComposer(w, h) {
 let tier = 'high';
 let usesComposer = true;
 
+// phones have small canvases on 2–3x screens: render at (near-)native ratio
+// there or the digits blur; big desktop canvases keep the cheaper cap
+function dprCap() {
+  const phone = window.innerWidth <= 900 || window.innerHeight <= 500;
+  if (tier === 'high') return phone ? 3 : 1.25;
+  return phone ? 2 : 1;
+}
+
 function applyTier(t) {
   tier = t;
   usesComposer = t === 'high';
-  renderer.setPixelRatio(usesComposer ? Math.min(window.devicePixelRatio, 1.25) : 1);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprCap()));
   renderer.setSize(window.innerWidth, window.innerHeight);
   if (usesComposer) sizeComposer(window.innerWidth, window.innerHeight);
   halo.visible = !usesComposer;
@@ -899,6 +907,7 @@ window.addEventListener('pointermove', e => {
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprCap()));
   renderer.setSize(window.innerWidth, window.innerHeight);
   if (usesComposer) sizeComposer(window.innerWidth, window.innerHeight);
   fitCamera();
