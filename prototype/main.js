@@ -22,7 +22,8 @@ const DEFAULTS = {
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    // hyper is deliberately not restored: every visit boots at normal scale
+    if (raw) return { ...DEFAULTS, ...JSON.parse(raw), hyper: false };
   } catch (_) { /* private mode etc. */ }
   return { ...DEFAULTS };
 }
@@ -714,7 +715,7 @@ function syncHyperMusic() {
   if (synthTarget > 0) startSynth();
 }
 
-// if hyper was persisted ON, autoplay is blocked until a real user gesture
+// retry after autoplay rejection: any real user gesture unlocks playback
 ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev =>
   window.addEventListener(ev, () => {
     if (musicTarget > 0 && musicAvailable && hyperMusic.paused) {

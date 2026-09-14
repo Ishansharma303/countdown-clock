@@ -5,7 +5,8 @@
 // prototype/index.html stays the single source of truth for markup.
 
 import { build } from 'esbuild';
-import { mkdir, readFile, writeFile, copyFile, rm, access } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile, copyFile, rename, rm, access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,17 +27,23 @@ await build({
   logLevel: 'info',
 });
 
+// content-hash the bundle name so browsers never serve a stale cached build
+// (the immutable cache header in vercel.json is only safe on a changing URL)
+const bundleBytes = await readFile(resolve(out, 'app.js'));
+const bundleName = `app-${createHash('md5').update(bundleBytes).digest('hex').slice(0, 8)}.js`;
+await rename(resolve(out, 'app.js'), resolve(out, bundleName));
+
 let html = await readFile(resolve(src, 'index.html'), 'utf8');
 
 // swap the dev importmap + module entry for the single bundled file
 html = html.replace(
   /\s*<script type="importmap">[\s\S]*?<\/script>\s*<script type="module" src="\.\/main\.js"><\/script>/,
-  '\n  <script type="module" src="./app.js"></script>'
+  `\n  <script type="module" src="./${bundleName}"></script>`
 );
 if (html.includes('importmap')) {
   throw new Error('build: failed to strip the dev importmap from index.html');
 }
-if (!html.includes('./app.js')) {
+if (!html.includes(`./${bundleName}`)) {
   throw new Error('build: bundled script tag was not injected into index.html');
 }
 
@@ -53,4 +60,4 @@ try {
   shippedTrack = true;
 } catch { /* no deployable track — the synth cue covers hyper mode */ }
 
-console.log(`built -> dist/ (index.html, app.js, get-your-clock.html${shippedTrack ? ', assets/hyper.mp3' : ''})`);
+console.log(`built -> dist/ (index.html, ${bundleName}, get-your-clock.html${shippedTrack ? ', assets/hyper.mp3' : ''})`);
