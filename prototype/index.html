@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Countdown Clock — Make Your Time Visible</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --accent: #ffb14d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #030304; overflow: hidden;
+    font-family: "Rajdhani", "Segoe UI", sans-serif;
+    user-select: none;
+  }
+  #scene { position: fixed; inset: 0; display: block; }
+
+  /* ---------- overlay chrome ---------- */
+  #overlay { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+
+  /* plain-blend scanlines: mix-blend-mode over a WebGL canvas forces an
+     expensive compositing path in Chrome, so use normal alpha stripes.
+     Kept faint — strong stripes visually "break" the digits at 1x DPI. */
+  #scanlines {
+    position: absolute; inset: 0; z-index: 6; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom, transparent 0px, transparent 3px,
+      rgba(0,0,0,0.07) 4px, rgba(0,0,0,0.07) 5px);
+    opacity: .8;
+  }
+  #vignette {
+    position: absolute; inset: 0; z-index: 6; pointer-events: none;
+    background: radial-gradient(ellipse at center,
+      transparent 55%, rgba(0,0,0,.55) 100%);
+  }
+
+  /* ---------- brand ---------- */
+  #brand {
+    position: absolute; top: 3.2vh; left: 3vw;
+    font-family: "Share Tech Mono", monospace;
+    font-size: 13px; letter-spacing: .3em;
+    color: rgba(255,255,255,.55);
+  }
+  #brand span {
+    display: block; margin-top: 4px;
+    font-size: 9px; letter-spacing: .24em;
+    color: rgba(255,255,255,.22);
+  }
+
+  /* ---------- header ---------- */
+  #header {
+    position: absolute; top: 4.5vh; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  #modeTitleRow { display: flex; align-items: center; gap: 14px; }
+  #modeTitle {
+    font-size: clamp(26px, 4.2vw, 52px); font-weight: 700;
+    letter-spacing: .42em; text-indent: .42em;
+    color: var(--accent);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+    transition: color .5s;
+  }
+  #modeSub {
+    font-family: "Share Tech Mono", monospace;
+    font-size: clamp(11px, 1.15vw, 15px);
+    letter-spacing: .34em; text-indent: .34em;
+    color: rgba(255,255,255,.44);
+  }
+
+  /* glitch animation applied to header text while switching */
+  .glitching #modeTitle { animation: txtGlitch .09s steps(2) infinite; }
+  .glitching #modeSub   { animation: txtGlitch .07s steps(2) infinite reverse; }
+  @keyframes txtGlitch {
+    0%   { transform: translate(0,0) skewX(0deg); text-shadow: 2px 0 #0ff, -2px 0 #f0f; }
+    25%  { transform: translate(-3px,1px) skewX(-8deg); text-shadow: -3px 0 #0ff, 3px 0 #f0f; }
+    50%  { transform: translate(2px,-1px) skewX(5deg);  text-shadow: 3px 0 #f00, -3px 0 #0ff; }
+    75%  { transform: translate(-1px,2px) skewX(-3deg); text-shadow: -2px 0 #f0f, 2px 0 #ff0; }
+    100% { transform: translate(1px,-2px) skewX(2deg);  text-shadow: 2px 0 #0ff, -2px 0 #f0f; }
+  }
+
+  /* ---------- footer controls ---------- */
+  #footer {
+    position: absolute; bottom: 3vh; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  #controls, #fxRow { display: flex; align-items: center; gap: 14px; pointer-events: auto; }
+  .btn {
+    font-family: "Share Tech Mono", monospace;
+    background: rgba(255,255,255,.03);
+    color: rgba(255,255,255,.75);
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 4px; cursor: pointer;
+    padding: 9px 18px; font-size: 14px; letter-spacing: .18em;
+    transition: all .18s;
+  }
+  .btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .btn:active { transform: scale(.95); }
+  .btn.chip { padding: 6px 13px; font-size: 11px; letter-spacing: .22em; }
+  .btn.chip.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  #modeCounter {
+    font-family: "Share Tech Mono", monospace;
+    color: rgba(255,255,255,.5); font-size: 13px; letter-spacing: .3em;
+    min-width: 110px; text-align: center;
+  }
+  #hint {
+    font-family: "Share Tech Mono", monospace;
+    font-size: 10px; letter-spacing: .28em;
+    color: rgba(255,255,255,.22);
+  }
+  #ctaLink {
+    pointer-events: auto;
+    font-family: "Share Tech Mono", monospace;
+    font-size: 11px; letter-spacing: .3em;
+    color: rgba(255,255,255,.4);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(255,255,255,.18);
+    padding-bottom: 2px;
+    transition: all .18s;
+  }
+  #ctaLink:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+
+  /* ---------- settings ---------- */
+  #settingsBtn {
+    position: absolute; bottom: 3vh; right: 3vw; pointer-events: auto;
+  }
+  #settingsPanel {
+    position: absolute; bottom: 11vh; right: 3vw; width: 330px;
+    background: rgba(8,8,10,.92);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+    padding: 18px 20px; pointer-events: auto;
+    display: none; flex-direction: column; gap: 12px;
+  }
+  #settingsPanel.open { display: flex; }
+  #settingsGrid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  #settingsPanel label {
+    font-family: "Share Tech Mono", monospace;
+    font-size: 9px; letter-spacing: .2em; color: rgba(255,255,255,.45);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #settingsPanel label.wide { grid-column: 1 / -1; }
+  #settingsPanel input, #settingsPanel select {
+    font-family: "Share Tech Mono", monospace;
+    background: rgba(255,255,255,.05); color: #fff;
+    border: 1px solid rgba(255,255,255,.18); border-radius: 4px;
+    padding: 7px 10px; font-size: 13px; color-scheme: dark;
+    width: 100%;
+  }
+  #settingsPanel label.check {
+    flex-direction: row; align-items: center; justify-content: space-between;
+  }
+  #settingsPanel label.check input {
+    width: auto; accent-color: var(--accent);
+  }
+  #settingsNote {
+    font-family: "Share Tech Mono", monospace;
+    font-size: 9px; line-height: 1.6; letter-spacing: .08em;
+    color: rgba(255,255,255,.3);
+  }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="overlay">
+    <div id="brand">COUNTDOWN·CLOCK<span>PROTOTYPE 0.2 · DESK DISPLAY SIM</span></div>
+
+    <div id="header">
+      <div id="modeTitleRow">
+        <div id="modeTitle">JUST DO IT</div>
+      </div>
+      <div id="modeSub">TIME REMAINING TO MAKE THE MOST OUT OF LIFE</div>
+    </div>
+
+    <div id="footer">
+      <div id="controls">
+        <button class="btn" id="prevBtn">&#9664;&nbsp;PREV</button>
+        <div id="modeCounter">MODE 01 / 07</div>
+        <button class="btn" id="nextBtn">NEXT&nbsp;&#9654;</button>
+      </div>
+      <div id="fxRow">
+        <button class="btn chip" id="hyperBtn">&#9889; HYPER OFF</button>
+        <button class="btn chip" id="fxBtn">FX DECRYPT</button>
+      </div>
+      <div id="hint">&#8592; &#8594; MODES &middot; H HYPER &middot; F FX &middot; ILLUSTRATIVE HORIZON, NOT A PREDICTION</div>
+      <a id="ctaLink" href="./get-your-clock.html">GET YOUR CLOCK &#8594;</a>
+    </div>
+
+    <button class="btn" id="settingsBtn">&#9881; SETUP</button>
+    <div id="settingsPanel">
+      <div id="settingsGrid">
+        <label class="wide">BIRTH DATE
+          <input type="date" id="birthInput" />
+        </label>
+        <label>HORIZON (YEARS)
+          <input type="number" id="horizonInput" min="1" max="120" step="1" />
+        </label>
+        <label>COFFEES / DAY
+          <input type="number" id="coffeesInput" min="0" max="20" step="1" />
+        </label>
+        <label>QUALITY
+          <select id="qualityInput">
+            <option value="auto">AUTO</option>
+            <option value="high">HIGH</option>
+            <option value="lite">LITE</option>
+          </select>
+        </label>
+        <label class="wide check">
+          <span>AUTO CYCLE MODES WHEN IDLE</span>
+          <input type="checkbox" id="autoCycleInput" />
+        </label>
+      </div>
+      <button class="btn" id="applyBtn">APPLY</button>
+      <div id="settingsNote">STORED LOCALLY ON THIS DEVICE ONLY. THE HORIZON IS AN ILLUSTRATIVE POPULATION-BASED RANGE, NOT A PREDICTION. UNKNOWN BIRTH TIME IS TREATED AS LOCAL NOON.</div>
+    </div>
+  </div>
+
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./node_modules/three/build/three.module.js",
+      "three/addons/": "./node_modules/three/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

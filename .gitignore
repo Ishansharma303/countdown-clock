@@ -1,0 +1,16 @@
+node_modules/
+dist/
+prototype/node_modules/
+prototype/dist/
+prototype/package.json
+prototype/package-lock.json
+
+# Licensed audio — local prototype only, must never reach a public deploy
+*.mp3
+prototype/assets/
+
+.vercel/
+.cursor/
+.DS_Store
+*.log
+.claude/

@@ -1,0 +1,15 @@
+{
+  "name": "countdown-clock",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Countdown Clock — a desk display that makes your time visible. Three.js prototype / concept site.",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "^0.170.0"
+  }
+}
