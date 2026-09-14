@@ -5,9 +5,12 @@ prototype/dist/
 prototype/package.json
 prototype/package-lock.json
 
-# Licensed audio — local prototype only, must never reach a public deploy
+# Licensed audio — local prototype only, must never reach a public deploy.
+# EXCEPTION: prototype/assets/hyper.mp3 is the deployable-track slot — put a
+# track you have the rights to publish there (e.g. NCS with attribution).
 *.mp3
-prototype/assets/
+prototype/assets/*
+!prototype/assets/hyper.mp3
 
 .vercel/
 .cursor/

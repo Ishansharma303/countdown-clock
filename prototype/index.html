@@ -120,6 +120,7 @@
     color: rgba(255,255,255,.22);
   }
   #ctaLink {
+    position: absolute; bottom: 1vh; left: 50%; transform: translateX(-50%);
     pointer-events: auto;
     font-family: "Share Tech Mono", monospace;
     font-size: 11px; letter-spacing: .3em;
@@ -214,6 +215,30 @@
     #brand span { display: none; }
   }
 
+  /* ---------- phones (touch, either orientation): controls stack on the left ---------- */
+  @media (pointer: coarse) and (max-width: 900px) {
+    #footer {
+      left: 2.5vw; right: auto; bottom: auto;
+      top: 50%; transform: translateY(-50%);
+      align-items: flex-start; gap: 10px;
+      flex-direction: column;
+    }
+    #controls, #fxRow {
+      flex-direction: column; align-items: stretch; gap: 6px;
+    }
+    #controls .btn, #fxRow .btn {
+      width: 118px; text-align: left;
+      padding: 8px 12px; font-size: 11px; letter-spacing: .14em;
+    }
+    #modeCounter {
+      order: -1; min-width: 0; text-align: left;
+      font-size: 10px; letter-spacing: .18em; padding-left: 2px;
+    }
+    #hint { display: none; }
+    /* the CTA holds the bottom centre */
+    #ctaLink { bottom: 2vh; font-size: 10px; letter-spacing: .22em; }
+  }
+
   /* ---------- portrait phones: ask for landscape ---------- */
   #rotateOverlay {
     position: fixed; inset: 0; z-index: 20;
@@ -276,8 +301,8 @@
         <button class="btn chip" id="fxBtn">FX DECRYPT</button>
       </div>
       <div id="hint">&#8592; &#8594; MODES &middot; H HYPER &middot; F FX &middot; ILLUSTRATIVE HORIZON, NOT A PREDICTION</div>
-      <a id="ctaLink" href="./get-your-clock.html">GET YOUR CLOCK &#8594;</a>
     </div>
+    <a id="ctaLink" href="./get-your-clock.html">GET YOUR CLOCK &#8594;</a>
 
     <button class="btn" id="settingsBtn">&#9881; SETUP</button>
     <div id="settingsPanel">

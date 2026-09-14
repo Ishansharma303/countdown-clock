@@ -84,12 +84,14 @@ Vercel reads [vercel.json](vercel.json): build with `npm run build`, serve
 
 ## Audio
 
-`prototype/assets/` is **git-ignored on purpose**. The local prototype plays a
-copyrighted track under HYPER mode for feel; it is never committed or
-deployed. Where the file is absent (every public deploy), an **original
-synthesized cue** plays instead — a soft clock tick each second under a
-slow-breathing minor drone, generated live in Web Audio. Nothing to license,
-nothing to download.
+`prototype/assets/` is **git-ignored on purpose**, with one carve-out:
+`prototype/assets/hyper.mp3` is the **deployable-track slot**. Put a track you
+have the rights to publish there (e.g. an NCS release, with its attribution
+requirements met) and it ships automatically — the build copies it and the
+player tries it first. Without it, HYPER falls back to a local dev-only track
+(never committed or deployed) and finally to an **original synthesized cue** —
+a soft clock tick each second under a slow-breathing minor drone, generated
+live in Web Audio. Nothing to license, nothing to download.
 
 ## Mobile
 

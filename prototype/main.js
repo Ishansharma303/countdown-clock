@@ -589,12 +589,16 @@ function fpsSample() {
 // ORIGINAL synthesized cue plays instead: a soft clock tick each second under
 // a slow-breathing minor drone. No files, nothing to license.
 
-const hyperMusic = new Audio('./assets/mountains.mp3');
+// source chain: the deployable licensed track first, the local dev track
+// second, the synthesized cue as the final fallback
+const MUSIC_SOURCES = ['./assets/hyper.mp3', './assets/mountains.mp3'];
+let musicSrcIdx = 0;
+const hyperMusic = new Audio(MUSIC_SOURCES[0]);
 hyperMusic.loop = true;
 hyperMusic.preload = 'none';     // only fetched once HYPER is actually used
 hyperMusic.volume = 0;
 let musicTarget = 0;
-let musicAvailable = true;       // flips false where the track is not deployed
+let musicAvailable = true;       // flips false when every source is absent
 
 let synth = null;
 let synthTarget = 0;
@@ -673,10 +677,16 @@ function startSynth() {
   synth.nextTick = Math.ceil(synth.ctx.currentTime + 0.05);
 }
 
-// the mp3 is absent on public deploys: fall through to the synthesized cue
+// walk the source chain; when every source 404s, hand over to the synth cue
 hyperMusic.addEventListener('error', () => {
-  musicAvailable = false;
-  syncHyperMusic();
+  musicSrcIdx++;
+  if (musicSrcIdx < MUSIC_SOURCES.length) {
+    hyperMusic.src = MUSIC_SOURCES[musicSrcIdx];
+    if (musicTarget > 0) hyperMusic.play().catch(() => {});
+  } else {
+    musicAvailable = false;
+    syncHyperMusic();
+  }
 });
 
 function syncHyperMusic() {

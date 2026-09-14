@@ -5,7 +5,7 @@
 // prototype/index.html stays the single source of truth for markup.
 
 import { build } from 'esbuild';
-import { mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, rm, access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,4 +43,14 @@ if (!html.includes('./app.js')) {
 await writeFile(resolve(out, 'index.html'), html);
 await copyFile(resolve(src, 'get-your-clock.html'), resolve(out, 'get-your-clock.html'));
 
-console.log('built -> dist/ (index.html, app.js, get-your-clock.html)');
+// deployable-track slot: assets/hyper.mp3 ships if (and only if) it exists.
+// This must only ever hold audio with publication rights (e.g. NCS).
+let shippedTrack = false;
+try {
+  await access(resolve(src, 'assets', 'hyper.mp3'));
+  await mkdir(resolve(out, 'assets'), { recursive: true });
+  await copyFile(resolve(src, 'assets', 'hyper.mp3'), resolve(out, 'assets', 'hyper.mp3'));
+  shippedTrack = true;
+} catch { /* no deployable track — the synth cue covers hyper mode */ }
+
+console.log(`built -> dist/ (index.html, app.js, get-your-clock.html${shippedTrack ? ', assets/hyper.mp3' : ''})`);
