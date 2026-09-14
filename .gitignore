@@ -6,9 +6,6 @@ prototype/package.json
 prototype/package-lock.json
 
 # Audio stays local — nothing in assets/ is committed or deployed.
-*.mp3
-prototype/assets/
-
 .vercel/
 .cursor/
 .DS_Store
