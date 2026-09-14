@@ -10,7 +10,6 @@ prototype/package-lock.json
 # track you have the rights to publish there (e.g. NCS with attribution).
 *.mp3
 prototype/assets/*
-!prototype/assets/hyper.mp3
 
 .vercel/
 .cursor/
